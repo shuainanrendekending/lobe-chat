@@ -17,6 +17,7 @@ export interface KnowledgeItem {
   metadata?: Record<string, any> | null;
   name: string;
   size: number;
+  slug?: string | null;
   /**
    * Source type to distinguish between files and documents
    * - 'file': from files table
@@ -55,11 +56,22 @@ export class KnowledgeRepo {
     showFilesInKnowledgeBase,
     parentId,
   }: QueryFileListParams = {}): Promise<KnowledgeItem[]> {
+    // If parentId is provided, check if it's a slug and resolve it to an ID
+    let resolvedParentId = parentId;
+    if (parentId) {
+      // Try to find a document with this slug
+      const docBySlug = await this.documentModel.findBySlug(parentId);
+      if (docBySlug) {
+        resolvedParentId = docBySlug.id;
+      }
+      // Otherwise assume it's already an ID
+    }
+
     // Build file query
     const fileQuery = this.buildFileQuery({
       category,
       knowledgeBaseId,
-      parentId,
+      parentId: resolvedParentId,
       q,
       showFilesInKnowledgeBase,
       sortType,
@@ -70,7 +82,7 @@ export class KnowledgeRepo {
     const documentQuery = this.buildDocumentQuery({
       category,
       knowledgeBaseId,
-      parentId,
+      parentId: resolvedParentId,
       q,
       sortType,
       sorter,
@@ -126,6 +138,7 @@ export class KnowledgeRepo {
         metadata,
         name: row.name,
         size: Number(row.size),
+        slug: row.slug,
         sourceType: row.source_type,
         updatedAt: new Date(row.updated_at),
         url: row.url,
@@ -260,6 +273,7 @@ export class KnowledgeRepo {
           f.embedding_task_id,
           d.editor_data,
           d.content,
+          d.slug,
           COALESCE(d.metadata, f.metadata) as metadata,
           'file' as source_type
         FROM ${files} f
@@ -297,6 +311,7 @@ export class KnowledgeRepo {
         f.embedding_task_id,
         d.editor_data,
         d.content,
+        d.slug,
         COALESCE(d.metadata, f.metadata) as metadata,
         'file' as source_type
       FROM ${files} f
@@ -364,6 +379,7 @@ export class KnowledgeRepo {
             NULL::uuid as embedding_task_id,
             NULL::jsonb as editor_data,
             NULL::text as content,
+            NULL::varchar(255) as slug,
             NULL::jsonb as metadata,
             NULL::text as source_type
           WHERE false
@@ -424,6 +440,7 @@ export class KnowledgeRepo {
               NULL::uuid as embedding_task_id,
               NULL::jsonb as editor_data,
               NULL::text as content,
+              NULL::varchar(255) as slug,
               NULL::jsonb as metadata,
               NULL::text as source_type
             WHERE false
@@ -448,6 +465,7 @@ export class KnowledgeRepo {
           NULL::uuid as embedding_task_id,
           NULL::jsonb as editor_data,
           NULL::text as content,
+          NULL::varchar(255) as slug,
           NULL::jsonb as metadata,
           NULL::text as source_type
         WHERE false
@@ -467,6 +485,7 @@ export class KnowledgeRepo {
         NULL as embedding_task_id,
         editor_data,
         content,
+        slug,
         metadata,
         'document' as source_type
       FROM ${documents}
